@@ -1,0 +1,26 @@
+# Cisco ACI APIC Configuration Template
+# Copy this file to .env and update with your actual values
+
+# APIC Controller URL
+APIC_URL=https://your-apic-url
+
+# Authentication credentials
+APIC_USERNAME=your-username
+APIC_PASSWORD=your-password
+
+# SSL certificate verification (set to 'true' for production, 'false' for lab)
+APIC_VERIFY_SSL=false
+
+# Optional: Session timeout settings
+APIC_TIMEOUT=30
+
+# Optional: Logging level (DEBUG, INFO, WARNING, ERROR)
+LOG_LEVEL=INFO
+
+# Cisco PSIRT API Configuration
+MY_PSIRT_CLIENT_ID=your-psirt-client-id
+MY_PSIRT_CLIENT_SECRET=your-psirt-client-secret
+MY_PSIRT_API_URL=https://apix.cisco.com/security/advisories/v2
+MY_PSIRT_API_TIMEOUT=10
+MY_PSIRT_API_VERIFY_SSL=true
+MY_PSIRT_LOG_LEVEL=INFO
