@@ -1,0 +1,17 @@
+# Core server and API
+fastmcp
+requests
+python-dotenv
+
+# HTML parsing (for field notices, etc.)
+beautifulsoup4
+
+# Word document generation
+python-docx
+
+# Optional: for async server (if used)
+uvicorn
+
+# Optional: for testing and linting
+# pytest
+# flake8
