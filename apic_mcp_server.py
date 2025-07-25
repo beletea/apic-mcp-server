@@ -1299,8 +1299,8 @@ if __name__ == "__main__":
     
     async def run_server():
         """Run the MCP server."""
-        await mcp.run()
-    
+        await mcp.run_stdio_async()
+
     # Run the server
     asyncio.run(run_server())
 
