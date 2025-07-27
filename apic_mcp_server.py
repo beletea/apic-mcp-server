@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 Cisco ACI APIC MCP Server
 
@@ -15,14 +16,14 @@ It is designed to work with environment variables for configuration, making it s
 import os
 import json
 import logging
-import re
+import sys
 from typing import Dict, Any, List, Optional
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
 import requests
 from bs4 import BeautifulSoup
 from auth_utils import APICAuthenticator, APICAuthenticationError
-from docx.enum.table import WD_TABLE_ALIGNMENT
+import asyncio
 
 # Load environment variables from .env file
 load_dotenv()
@@ -32,10 +33,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Create MCP server instance
-mcp = FastMCP("Cisco ACI APIC Server")
+mcp = FastMCP("Cisco-APIC-Server", settings={"initialization_timeout": 10.0})
 
 # Global authenticator instance (will be initialized when needed)
 _authenticator: Optional[APICAuthenticator] = None
+   
 
 def get_authenticator() -> APICAuthenticator:
     """Get or create the global authenticator instance."""
@@ -51,6 +53,14 @@ def get_authenticator() -> APICAuthenticator:
             _authenticator.username = username
         if hasattr(_authenticator, 'password'):
             _authenticator.password = password
+    # Authenticate only if token is missing or expired
+    if not getattr(_authenticator, 'token', None):
+        username = getattr(_authenticator, 'username', os.getenv('APIC_USERNAME', 'admin'))
+        password = getattr(_authenticator, 'password', os.getenv('APIC_PASSWORD', 'password'))
+        try:
+            _authenticator.authenticate(username, password)
+        except Exception:
+            pass  # Let the calling function handle errors if needed
     return _authenticator
 
 @mcp.tool()
@@ -64,6 +74,7 @@ def authenticate_apic(apic_url: str, username: str, password: str, verify_ssl: b
     :param verify_ssl: Whether to verify SSL certificates (default: False for lab environments)
     :return: Authentication information including JWT token and session details
     """
+
     global _authenticator
 
     # Use .env credentials if arguments are not provided
@@ -124,18 +135,14 @@ def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = N
         
         # Build the API endpoint
         endpoint = f"/api/class/{class_name}.json"
-        
         # Add query parameters if provided
         if query_params:
             params = "&".join([f"{k}={v}" for k, v in query_params.items()])
             endpoint += f"?{params}"
-        
         # Make the API request
         response = authenticator.make_authenticated_request(endpoint)
-        
         # Process the response
         objects = response.get('imdata', [])
-        
         return {
             "status": "success",
             "message": f"Successfully fetched {len(objects)} {class_name} objects",
@@ -144,7 +151,6 @@ def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = N
             "endpoint": endpoint,
             "objects": objects
         }
-        
     except APICAuthenticationError as e:
         return {
             "status": "error",
@@ -1295,11 +1301,9 @@ Use the available APIC MCP tools to gather this information and provide insights
 
 
 if __name__ == "__main__":
-    import asyncio
-    
-    async def run_server():
+    def run_server():
         """Run the MCP server."""
-        await mcp.run_stdio_async()
+        mcp.run_stdio_async()
 
     # Run the server
     asyncio.run(run_server())
