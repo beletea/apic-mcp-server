@@ -134,6 +134,37 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
 
 **Warning:** These tools perform changes directly on your Cisco ACI fabric. Creating or deleting objects can disrupt production environments, cause outages, or result in data loss. Always double-check your parameters and use these tools only if you understand the impact. It is recommended to test in a non-production environment first.
 
+### Confirmation Workflow for Create/Delete Actions
+
+For all dangerous operations (such as creating or deleting APIC objects), the MCP server enforces a confirmation workflow:
+
+- **Preview Step:** When you request a create or delete action (e.g., creating a tenant or deleting an EPG), the server will first show you a preview of what will be pushed or deleted. This includes the full payload or distinguished name (DN) of the object.
+- **Explicit Confirmation Required:** The operation will only proceed if you explicitly confirm (e.g., by replying "yes" or confirming in the UI). If you do not confirm, the action is cancelled and no changes are made.
+- **Safety:** This workflow helps prevent accidental changes and ensures you have a chance to review all destructive or impactful actions before they are executed.
+
+#### Example: Creating a Tenant
+```python
+# Request to create a tenant
+result = create_apic_object(parent_dn="uni", object_payload={"fvTenant": {"attributes": {"name": "mcp-server"}}}, confirm=False)
+# You will receive a preview and must confirm before proceeding
+if result["status"] == "pending":
+    # Review the payload, then confirm
+    result = create_apic_object(parent_dn="uni", object_payload={"fvTenant": {"attributes": {"name": "mcp-server"}}}, confirm=True)
+```
+
+#### Example: Deleting a Tenant
+```python
+# Request to delete a tenant
+result = delete_apic_object(object_dn="uni/tn-mcp-server", confirm=False)
+# You will receive a preview and must confirm before proceeding
+if result["status"] == "pending":
+    # Review the DN, then confirm
+    result = delete_apic_object(object_dn="uni/tn-mcp-server", confirm=True)
+```
+
+This confirmation workflow applies to all create and delete operations exposed by the MCP server.
+
+---
 ## 🚀 Getting Started
 
 ### Prerequisites
