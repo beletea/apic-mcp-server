@@ -1,15 +1,19 @@
+
 # Core server and API
+mcp
+mcp[cli]
 fastmcp
 requests
 python-dotenv
+httpx
 
-# HTML parsing (for field notices, etc.)
+# HTML parsing and scraping (for field notices, etc.)
 beautifulsoup4
 
 # Word document generation
 python-docx
 
-# Optional: for async server (if used)
+# Async server (optional)
 uvicorn
 
 # Optional: for testing and linting

@@ -7,7 +7,7 @@ APIC_USERNAME=admin
 APIC_PASSWORD=mypassword
 APIC_VERIFY_SSL=false
 ```
-Make sure your `.env` file is present in the project root and contains the correct values. Arguments to the `authenticate_apic` function are ignored.
+Make sure your `.env` file is present in the project root and contains the correct values. use `.env.template` as a reference. Arguments to the `authenticate_apic` function are ignored.
 
 Example usage:
 
@@ -28,8 +28,8 @@ The APIC-MCP-Server is a Python-based MCP server and it provides:
 - **🔌 Direct APIC Integration**: Seamless authentication and communication with Cisco APIC controllers
 - **📊 Comprehensive Analysis**: Detailed tenant, EPG, BD, VRF, and security policy analysis
 - **🔍 Security Monitoring**: Contract deny logging, vulnerability checking via PSIRT API
-- **📋 Documentation Generation**: Automated Word document generation for infrastructure reports
-- **⚡ Fabric Monitoring**: Live fabric health monitoring and troubleshooting capabilities
+- **📋 Documentation Generation**: Automated document generation for infrastructure reports
+- **⚡ Fabric Monitoring**: Fabric health monitoring and troubleshooting capabilities
 
 ## 🏗️ Architecture Overview
 
@@ -60,7 +60,7 @@ The APIC-MCP-Server is a Python-based MCP server and it provides:
 #### 1. **apic_mcp_server.py** (Main Server)
 - **FastMCP Framework**: Primary MCP server implementation
 - **20+ Tools**: Comprehensive set of APIC management tools
-- **Document Generation**: Creates professional Word reports
+- **Document Generation**: Creates professional reports
 
 #### 2. **auth_utils.py** (Authentication)
 - **APIC Authentication**: Secure JWT token management
@@ -126,7 +126,13 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
 - `get_nexus_9000_field_notices()` - Switch field notices
 
 ### Documentation
-- `create_tenant_analysis_document()` - Generate Word reports
+- `create_tenant_analysis_document()` - Generate reports
+
+### ⚠️ Dangerous Operations
+- `create_apic_object()` - Create an APIC object in the fabric
+- `delete_apic_object()` - Delete an APIC object from the fabric
+
+**Warning:** These tools perform changes directly on your Cisco ACI fabric. Creating or deleting objects can disrupt production environments, cause outages, or result in data loss. Always double-check your parameters and use these tools only if you understand the impact. It is recommended to test in a non-production environment first.
 
 ## 🚀 Getting Started
 
@@ -192,11 +198,11 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
    - Or install "Claude Dev" extension which supports MCP
 
 2. **Configure MCP Server**
-   
-   Create or update your VS Code `mcp.json`:
+
+   Create or update your VS Code `.vscode/mcp.json`:
    ```json
    {
-     "mcpServers": {
+     "servers": {
        "cisco-aci-apic": {
          "command": "uv",
          "args": [
@@ -211,27 +217,8 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
      }
    }
    ```
+  Replace `<path-to-your-apic_mcp_server.py>` with the full path to your `apic_mcp_server.py` file.
 
-   Or use the included `.vscode/mcp.json` configuration:
-   ```json
-   {
-     "servers": {
-       "cisco-aci-apic": {
-         "command": "uv",
-         "args": [
-           "run",
-           "--with",
-           "mcp",
-           "mcp",
-           "run",
-           "apic_mcp_server.py"
-         ]
-       }
-     }
-   }
-   ```
-   *Note: Environment variables can be set in `.env` file or added to the config above.*
-  
    ```
 
 3. **Restart VS Code** and the MCP server will be available in your VS Code environment.
@@ -270,6 +257,24 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
      }
    }
    ```
+  Replace `<full-path-to-your-apic_mcp_server.py>` with the full path to your `apic_mcp_server.py` file.
+  If you encounter issues with the project path, you may need to adjust the path accordingly, like this:
+   ```json
+   {
+     "mcpServers": {
+       "cisco-aci-apic": {
+         "command": "<full-path-to-your-uv>",
+         "args": [
+           "run",
+           "--project",
+           "<full-path-to-your-apic_mcp_server>",
+           "python",
+           "<full-path-to-your-apic_mcp_server.py>"
+         ]
+       }
+     }
+   }
+    ```
 
 3. **Restart Claude Desktop** and the APIC tools will be available in your conversations.
 
@@ -377,11 +382,10 @@ doc_result = create_tenant_analysis_document(
 ├── README.md               # Project documentation
 ├── requirements.txt        # Project dependencies
 ├── LICENSE                 # Project license
-└── .vscode/                # VS Code configuration
+└── .vscode/                # VS Code configuration (you need to create this folder for VS Code integration)
     ├── mcp.json            # MCP server configuration
-    └── settings.json       # VS Code settings
-```
 
+```
 ### Adding New Tools
 
 1. **Define the Tool Function**
@@ -594,8 +598,7 @@ pip install black flake8 pytest
 ### Areas for Contribution
 
 - **New APIC Tools**: Add support for additional APIC classes / use cases
-- **Enhanced Analysis**: Improve tenant analysis algorithms
-- **UI Improvements**: Create web interface for the server
+- **Enhanced Analysis**: Improve fabric object analysis algorithms
 - **Documentation**: Improve examples and tutorials
 - **Testing**: Add comprehensive test suite
 - **Performance**: Optimize API calls and caching
