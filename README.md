@@ -140,8 +140,8 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
 
 1. **Clone the Repository**
 ```bash
-git clone https://wwwin-github.cisco.com/bageze/APIC-MCP-Server.git
-cd mcp-server
+git clone <your-repo-url>
+cd <your-project-directory>
 ```
 
 2. **Install Dependencies**
@@ -198,14 +198,14 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
    {
      "mcpServers": {
        "cisco-aci-apic": {
-         "command": "/Users/bageze/.local/bin/uv",
+         "command": "uv",
          "args": [
            "run",
            "--with",
            "mcp",
            "mcp",
            "run",
-           "/path/to/your/mcp-server/apic_mcp_server.py"
+           "<path-to-your-apic_mcp_server.py>"
          ]
        }
      }
@@ -217,7 +217,7 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
    {
      "servers": {
        "cisco-aci-apic": {
-         "command": "/Users/bageze/.local/bin/uv",
+         "command": "uv",
          "args": [
            "run",
            "--with",
@@ -257,14 +257,14 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
    {
      "mcpServers": {
        "cisco-aci-apic": {
-         "command": "/Users/bageze/.local/bin/uv",
+         "command": "uv",
          "args": [
            "run",
            "--with",
            "mcp",
            "mcp",
            "run",
-           "/full/path/to/your/mcp-server/apic_mcp_server.py"
+           "<full-path-to-your-apic_mcp_server.py>"
          ]
        }
      }
@@ -370,7 +370,7 @@ doc_result = create_tenant_analysis_document(
 
 ### Project Structure
 ```
-mcp-server/
+<your-project-directory>/
 ├── apic_mcp_server.py      # Main MCP server with 60+ tools
 ├── auth_utils.py           # APIC authentication utilities
 ├── .env.template           # Environment template file
