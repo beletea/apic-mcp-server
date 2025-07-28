@@ -20,10 +20,10 @@ import sys
 from typing import Dict, Any, List, Optional
 from mcp.server.fastmcp import FastMCP
 from dotenv import load_dotenv
-import requests
+import httpx
+import asyncio
 from bs4 import BeautifulSoup
 from auth_utils import APICAuthenticator, APICAuthenticationError
-import asyncio
 
 # Load environment variables from .env file
 load_dotenv()
@@ -39,7 +39,7 @@ mcp = FastMCP("Cisco-APIC-Server", settings={"initialization_timeout": 10.0})
 _authenticator: Optional[APICAuthenticator] = None
    
 
-def get_authenticator() -> APICAuthenticator:
+async def get_authenticator() -> APICAuthenticator:
     """Get or create the global authenticator instance."""
     global _authenticator
     if _authenticator is None:
@@ -58,13 +58,13 @@ def get_authenticator() -> APICAuthenticator:
         username = getattr(_authenticator, 'username', os.getenv('APIC_USERNAME', 'admin'))
         password = getattr(_authenticator, 'password', os.getenv('APIC_PASSWORD', 'password'))
         try:
-            _authenticator.authenticate(username, password)
+            await _authenticator.authenticate(username, password)
         except Exception:
             pass  # Let the calling function handle errors if needed
     return _authenticator
 
 @mcp.tool()
-def authenticate_apic(apic_url: str, username: str, password: str, verify_ssl: bool = False) -> Dict[str, Any]:
+async def authenticate_apic(apic_url: str, username: str, password: str, verify_ssl: bool = False) -> Dict[str, Any]:
     """
     Authenticate to a Cisco ACI APIC controller and establish a session using .env variables.
     
@@ -83,10 +83,11 @@ def authenticate_apic(apic_url: str, username: str, password: str, verify_ssl: b
     env_password = os.getenv('APIC_PASSWORD', 'password')
     env_verify_ssl = os.getenv('APIC_VERIFY_SSL', 'false').lower() == 'true'
 
-    apic_url = apic_url or env_apic_url
-    username = username or env_username
-    password = password or env_password
-    verify_ssl = verify_ssl or env_verify_ssl
+    # Always use .env credentials, ignore arguments
+    apic_url = env_apic_url
+    username = env_username
+    password = env_password
+    verify_ssl = env_verify_ssl
 
     try:
         _authenticator = APICAuthenticator(apic_url, verify_ssl)
@@ -95,8 +96,7 @@ def authenticate_apic(apic_url: str, username: str, password: str, verify_ssl: b
             _authenticator.username = username
         if hasattr(_authenticator, 'password'):
             _authenticator.password = password
-        auth_info = _authenticator.authenticate(username, password)
-        
+        auth_info = await _authenticator.authenticate(username, password)
         # Directly use the dictionary returned by the authenticator
         return auth_info
     except APICAuthenticationError as e:
@@ -115,7 +115,7 @@ def authenticate_apic(apic_url: str, username: str, password: str, verify_ssl: b
         }
 
 @mcp.tool()
-def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+async def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     """
     Fetch objects of a specific APIC class.
     
@@ -124,15 +124,13 @@ def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = N
     :return: APIC API response containing the requested class objects
     """
     try:
-        authenticator = get_authenticator()
-        
+        authenticator = await get_authenticator()
         if not authenticator.token:
             return {
                 "status": "error",
                 "message": "Not authenticated. Please authenticate first using authenticate_apic tool.",
                 "class_name": class_name
             }
-        
         # Build the API endpoint
         endpoint = f"/api/class/{class_name}.json"
         # Add query parameters if provided
@@ -140,7 +138,7 @@ def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = N
             params = "&".join([f"{k}={v}" for k, v in query_params.items()])
             endpoint += f"?{params}"
         # Make the API request
-        response = authenticator.make_authenticated_request(endpoint)
+        response = await authenticator.make_authenticated_request(endpoint)
         # Process the response
         objects = response.get('imdata', [])
         return {
@@ -165,7 +163,7 @@ def fetch_apic_class(class_name: str, query_params: Optional[Dict[str, str]] = N
         }
 
 @mcp.tool()
-def get_tenants(include_children: bool = False) -> Dict[str, Any]:
+async def get_tenants(include_children: bool = False) -> Dict[str, Any]:
     """
     Get all tenants from the APIC controller.
     
@@ -176,10 +174,10 @@ def get_tenants(include_children: bool = False) -> Dict[str, Any]:
     if include_children:
         query_params['rsp-subtree'] = 'children'
     
-    return fetch_apic_class('fvTenant', query_params)
+    return await fetch_apic_class('fvTenant', query_params)
 
 @mcp.tool()
-def get_application_profiles(tenant_name: Optional[str] = None) -> Dict[str, Any]:
+async def get_application_profiles(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Get application profiles from the APIC controller.
     
@@ -190,10 +188,10 @@ def get_application_profiles(tenant_name: Optional[str] = None) -> Dict[str, Any
     if tenant_name:
         query_params['query-target-filter'] = f'eq(fvAp.name,"{tenant_name}")'
     
-    return fetch_apic_class('fvAp', query_params)
+    return await fetch_apic_class('fvAp', query_params)
 
 @mcp.tool()
-def get_epgs(tenant_name: Optional[str] = None, app_profile_name: Optional[str] = None) -> Dict[str, Any]:
+async def get_epgs(tenant_name: Optional[str] = None, app_profile_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Get Endpoint Groups (EPGs) from the APIC controller.
     
@@ -217,23 +215,23 @@ def get_epgs(tenant_name: Optional[str] = None, app_profile_name: Optional[str] 
     query_params['rsp-subtree'] = 'children'
     query_params['rsp-subtree-class'] = 'fvRsBd'
     
-    return fetch_apic_class('fvAEPg', query_params)
+    return await fetch_apic_class('fvAEPg', query_params)
 
 @mcp.tool()
-def get_fabric_nodes() -> Dict[str, Any]:
+async def get_fabric_nodes() -> Dict[str, Any]:
     """
     Get fabric nodes (switches, controllers) from the APIC controller with OOB and INB management IPs.
     
     :return: List of fabric nodes with their details including management IPs
     """
-    nodes_result = fetch_apic_class('fabricNode')
+    nodes_result = await fetch_apic_class('fabricNode')
     if nodes_result.get('status') != 'success':
         return nodes_result
     
     nodes = nodes_result.get('objects', [])
     
     # Get OOB management IPs from mgmtRsOoBStNode
-    oob_result = fetch_apic_class('mgmtRsOoBStNode')
+    oob_result = await fetch_apic_class('mgmtRsOoBStNode')
     oob_ips = {}
     if oob_result.get('status') == 'success':
         for oob_obj in oob_result.get('objects', []):
@@ -245,7 +243,7 @@ def get_fabric_nodes() -> Dict[str, Any]:
                 oob_ips[node_id] = oob_attrs.get('addr', '')
     
     # Get INB management IPs from mgmtRsInBStNode
-    inb_result = fetch_apic_class('mgmtRsInBStNode')
+    inb_result = await fetch_apic_class('mgmtRsInBStNode')
     inb_ips = {}
     if inb_result.get('status') == 'success':
         for inb_obj in inb_result.get('objects', []):
@@ -277,7 +275,7 @@ def get_fabric_nodes() -> Dict[str, Any]:
     }
 
 @mcp.tool()
-def get_bridge_domains(tenant_name: Optional[str] = None) -> Dict[str, Any]:
+async def get_bridge_domains(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Get bridge domains from the APIC controller.
     
@@ -288,10 +286,10 @@ def get_bridge_domains(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     if tenant_name:
         query_params['query-target-filter'] = f'wcard(fvBD.dn,"tn-{tenant_name}")'
     
-    return fetch_apic_class('fvBD', query_params)
+    return await fetch_apic_class('fvBD', query_params)
 
 @mcp.tool()
-def get_contracts(tenant_name: Optional[str] = None) -> Dict[str, Any]:
+async def get_contracts(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Get contracts from the APIC controller.
     
@@ -302,10 +300,10 @@ def get_contracts(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     if tenant_name:
         query_params['query-target-filter'] = f'wcard(vzBrCP.dn,"tn-{tenant_name}")'
     
-    return fetch_apic_class('vzBrCP', query_params)
+    return await fetch_apic_class('vzBrCP', query_params)
 
 @mcp.tool()
-def get_vrfs(tenant_name: Optional[str] = None) -> Dict[str, Any]:
+async def get_vrfs(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     """
     Get VRFs (Virtual Routing and Forwarding contexts) from the APIC controller.
     
@@ -316,10 +314,10 @@ def get_vrfs(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     if tenant_name:
         query_params['query-target-filter'] = f'wcard(fvCtx.dn,"tn-{tenant_name}")'
     
-    return fetch_apic_class('fvCtx', query_params)
+    return await fetch_apic_class('fvCtx', query_params)
 
 @mcp.tool()
-def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> Dict[str, Any]:
+async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Create an APIC object in the fabric. This is a dangerous operation.
 
@@ -330,23 +328,18 @@ def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> Dict[s
     :return: The result of the creation operation.
     """
     try:
-        authenticator = get_authenticator()
-        
+        authenticator = await get_authenticator()
         if not authenticator.token:
             return {
                 "status": "error",
                 "message": "Not authenticated. Please authenticate first using authenticate_apic tool."
             }
-        
         # The endpoint for creation is the parent's DN
         endpoint = f"/api/mo/{parent_dn}.json"
-        
         # The method for creation is POST
-        response = authenticator.make_authenticated_request(endpoint, method='POST', payload=object_payload)
-        
+        response = await authenticator.make_authenticated_request(endpoint, method='POST', payload=object_payload)
         # A successful POST usually returns a 200 OK with an empty imdata or some status info.
         # The make_authenticated_request should raise an exception on non-2xx status codes.
-        
         return {
             "status": "success",
             "message": f"Successfully sent creation request for object under '{parent_dn}'.",
@@ -369,7 +362,7 @@ def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> Dict[s
         }
 
 @mcp.tool()
-def delete_apic_object(object_dn: str) -> Dict[str, Any]:
+async def delete_apic_object(object_dn: str) -> Dict[str, Any]:
     """
     Delete an APIC object from the fabric. This is a dangerous operation.
 
@@ -378,22 +371,17 @@ def delete_apic_object(object_dn: str) -> Dict[str, Any]:
     :return: The result of the deletion operation.
     """
     try:
-        authenticator = get_authenticator()
-        
+        authenticator = await get_authenticator()
         if not authenticator.token:
             return {
                 "status": "error",
                 "message": "Not authenticated. Please authenticate first using authenticate_apic tool."
             }
-        
         # The endpoint for deletion is the object's DN
         endpoint = f"/api/mo/{object_dn}.json"
-        
         # The method for deletion is DELETE
-        response = authenticator.make_authenticated_request(endpoint, method='DELETE')
-        
+        response = await authenticator.make_authenticated_request(endpoint, method='DELETE')
         # A successful DELETE usually returns a 200 OK with an empty imdata or some status info.
-        
         return {
             "status": "success",
             "message": f"Successfully sent deletion request for object '{object_dn}'.",
@@ -415,7 +403,7 @@ def delete_apic_object(object_dn: str) -> Dict[str, Any]:
         }
 
 @mcp.tool()
-def search_objects_by_name(object_name: str, class_filter: Optional[str] = None) -> Dict[str, Any]:
+async def search_objects_by_name(object_name: str, class_filter: Optional[str] = None) -> Dict[str, Any]:
     """
     Search for APIC objects by name across different classes.
     
@@ -424,41 +412,33 @@ def search_objects_by_name(object_name: str, class_filter: Optional[str] = None)
     :return: Search results with matching objects
     """
     try:
-        authenticator = get_authenticator()
-        
+        authenticator = await get_authenticator()
         if not authenticator.token:
             return {
                 "status": "error",
                 "message": "Not authenticated. Please authenticate first using authenticate_apic tool.",
                 "search_term": object_name
             }
-        
         # Common classes to search
         search_classes = ['fvTenant', 'fvAp', 'fvAEPg', 'fvBD', 'fvCtx', 'vzBrCP'] 
-        
         if class_filter:
             search_classes = [class_filter]
-        
         results = {}
         total_found = 0
-        
         for class_name in search_classes:
             try:
                 endpoint = f"/api/class/{class_name}.json?query-target-filter=eq({class_name}.name,\"{object_name}\")"
-                response = authenticator.make_authenticated_request(endpoint)
+                response = await authenticator.make_authenticated_request(endpoint)
                 objects = response.get('imdata', [])
-                
                 if objects:
                     results[class_name] = {
                         "count": len(objects),
                         "objects": objects
                     }
                     total_found += len(objects)
-                    
             except Exception as e:
                 logger.warning(f"Failed to search class {class_name}: {e}")
                 continue
-        
         return {
             "status": "success",
             "message": f"Found {total_found} objects matching '{object_name}'",
@@ -476,15 +456,14 @@ def search_objects_by_name(object_name: str, class_filter: Optional[str] = None)
         }
 
 @mcp.tool()
-def get_apic_status() -> Dict[str, Any]:
+async def get_apic_status() -> Dict[str, Any]:
     """
     Get the current APIC authentication status and session information.
     
     :return: Current authentication status and session details
     """
     try:
-        authenticator = get_authenticator()
-        
+        authenticator = await get_authenticator()
         if not authenticator.token:
             return {
                 "status": "not_authenticated",
@@ -492,12 +471,10 @@ def get_apic_status() -> Dict[str, Any]:
                 "apic_url": authenticator.apic_url,
                 "verify_ssl": authenticator.verify_ssl
             }
-        
         # Try to make a simple API call to verify the session is still valid
         try:
-            response = authenticator.make_authenticated_request('/api/class/aaaUser.json?query-target-self')
+            response = await authenticator.make_authenticated_request('/api/class/aaaUser.json?query-target-self')
             user_info = response.get('imdata', [])
-            
             return {
                 "status": "authenticated",
                 "message": "Active APIC session",
@@ -506,7 +483,6 @@ def get_apic_status() -> Dict[str, Any]:
                 "token_preview": authenticator.token[:20] + "..." if authenticator.token else "No token",
                 "user_info": user_info[0] if user_info else "No user info available"
             }
-            
         except APICAuthenticationError:
             return {
                 "status": "session_expired",
@@ -522,7 +498,7 @@ def get_apic_status() -> Dict[str, Any]:
         }
 
 @mcp.tool()
-def logout_apic() -> Dict[str, Any]:
+async def logout_apic() -> Dict[str, Any]:
     """
     Logout from the APIC controller and invalidate the current session.
     
@@ -532,9 +508,8 @@ def logout_apic() -> Dict[str, Any]:
     
     try:
         if _authenticator and _authenticator.token:
-            success = _authenticator.logout()
+            success = await _authenticator.logout()
             _authenticator = None  # Clear the global authenticator
-            
             if success:
                 return {
                     "status": "success",
@@ -559,15 +534,15 @@ def logout_apic() -> Dict[str, Any]:
 
 # Resources for common APIC information
 @mcp.resource("apic://status")
-def apic_status_resource() -> str:
+async def apic_status_resource() -> str:
     """
     Resource providing current APIC connection status.
     """
-    status = get_apic_status()
+    status = await get_apic_status()
     return json.dumps(status, indent=2)
 
 @mcp.resource("apic://classes") # Resource listing common APIC classes
-def apic_classes_resource() -> str:
+async def apic_classes_resource() -> str:
     """
     Resource listing common APIC classes that can be queried.
     """
@@ -838,7 +813,7 @@ def get_node_interface_status() -> Dict[str, Any]:
 
 # verify APIC vulnerabilities using PSIRT API
 @mcp.tool()
-def verify_apic_vulnerability() -> dict:
+async def verify_apic_vulnerability() -> dict:
     """
     Verify APIC vulnerabilities using the PSIRT API endpoint base_url/product?product=apic.
     :return: Dictionary with vulnerability/advisory results
@@ -860,37 +835,38 @@ def verify_apic_vulnerability() -> dict:
     }
     token_headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     try:
-        token_resp = requests.post(token_url, data=token_data, headers=token_headers, timeout=10)
-        if not token_resp.ok:
-            return {
-                'status': 'error',
-                'message': f'Failed to get OAuth token: {token_resp.text}'
+        async with httpx.AsyncClient(timeout=10) as client:
+            token_resp = await client.post(token_url, data=token_data, headers=token_headers)
+            if token_resp.status_code != 200:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to get OAuth token: {token_resp.text}'
+                }
+            token_json = token_resp.json()
+            access_token = token_json.get('access_token')
+            if not access_token:
+                return {
+                    'status': 'error',
+                    'message': 'No access token received from Cisco OAuth.'
+                }
+            # Step 2: Call product endpoint to get APIC vulnerabilities
+            headers = {
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {access_token}'
             }
-        token_json = token_resp.json()
-        access_token = token_json.get('access_token')
-        if not access_token:
+            product_url = f"{base_url}/product?product=apic"
+            resp = await client.get(product_url, headers=headers)
+            if resp.status_code != 200:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to fetch APIC vulnerabilities: {resp.text}'
+                }
+            data = resp.json()
             return {
-                'status': 'error',
-                'message': 'No access token received from Cisco OAuth.'
+                'status': 'success',
+                'product': 'apic',
+                'vulnerabilities': data
             }
-        # Step 2: Call product endpoint to get APIC vulnerabilities
-        headers = {
-            'Accept': 'application/json',
-            'Authorization': f'Bearer {access_token}'
-        }
-        product_url = f"{base_url}/product?product=apic"
-        resp = requests.get(product_url, headers=headers, timeout=10)
-        if not resp.ok:
-            return {
-                'status': 'error',
-                'message': f'Failed to fetch APIC vulnerabilities: {resp.text}'
-            }
-        data = resp.json()
-        return {
-            'status': 'success',
-            'product': 'apic',
-            'vulnerabilities': data
-        }
     except Exception as e:
         return {
             'status': 'error',
@@ -899,7 +875,7 @@ def verify_apic_vulnerability() -> dict:
     
 # Tool: Check if ACI version is in PSIRT database   
 @mcp.tool()
-def is_aci_version_in_psirt(version: str) -> dict:
+async def is_aci_version_in_psirt(version: str) -> dict:
     """
     Verify if the given ACI version is present in the PSIRT database using the OS_data endpoint.
     :param version: ACI code version (e.g., '5.2(3e)')
@@ -922,41 +898,42 @@ def is_aci_version_in_psirt(version: str) -> dict:
     }
     token_headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     try:
-        token_resp = requests.post(token_url, data=token_data, headers=token_headers, timeout=10)
-        if not token_resp.ok:
-            return {
-                'status': 'error',
-                'message': f'Failed to get OAuth token: {token_resp.text}'
+        async with httpx.AsyncClient(timeout=10) as client:
+            token_resp = await client.post(token_url, data=token_data, headers=token_headers)
+            if token_resp.status_code != 200:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to get OAuth token: {token_resp.text}'
+                }
+            token_json = token_resp.json()
+            access_token = token_json.get('access_token')
+            if not access_token:
+                return {
+                    'status': 'error',
+                    'message': 'No access token received from Cisco OAuth.'
+                }
+            # Step 2: Call OS_data endpoint to get available versions
+            headers = {
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {access_token}'
             }
-        token_json = token_resp.json()
-        access_token = token_json.get('access_token')
-        if not access_token:
+            os_data_url = f"{base_url}/OS_version/OS_data?OSType=aci"
+            resp = await client.get(os_data_url, headers=headers)
+            if resp.status_code != 200:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to fetch OS_data: {resp.text}'
+                }
+            data = resp.json()
+            # Extract available versions
+            available_versions = data.get('OSVersions', [])
+            found = version in available_versions
             return {
-                'status': 'error',
-                'message': 'No access token received from Cisco OAuth.'
+                'status': 'success',
+                'version': version,
+                'found': found,
+                'available_versions': available_versions
             }
-        # Step 2: Call OS_data endpoint to get available versions
-        headers = {
-            'Accept': 'application/json',
-            'Authorization': f'Bearer {access_token}'
-        }
-        os_data_url = f"{base_url}/OS_version/OS_data?OSType=aci"
-        resp = requests.get(os_data_url, headers=headers, timeout=10)
-        if not resp.ok:
-            return {
-                'status': 'error',
-                'message': f'Failed to fetch OS_data: {resp.text}'
-            }
-        data = resp.json()
-        # Extract available versions
-        available_versions = data.get('OSVersions', [])
-        found = version in available_versions
-        return {
-            'status': 'success',
-            'version': version,
-            'found': found,
-            'available_versions': available_versions
-        }
     except Exception as e:
         return {
             'status': 'error',
@@ -964,7 +941,7 @@ def is_aci_version_in_psirt(version: str) -> dict:
         }
 # Tool: Check Cisco ACI switches PSIRT advisories
 @mcp.tool()
-def check_cisco_aci_switches_psirt(os_version: str) -> dict:
+async def check_cisco_aci_switches_psirt(os_version: str) -> dict:
     """
     Check PSIRT (Product Security Incident Response Team) Cisco Security Advisories for a given product and code version.
     Uses service API with base URL and credentials from .env.
@@ -972,7 +949,6 @@ def check_cisco_aci_switches_psirt(os_version: str) -> dict:
     :param code_version: Code version (e.g., '5.2(3e)')
     :return: Dictionary with PSIRT and advisory results
     """
-    import requests
     base_url = os.getenv('MY_PSIRT_API_URL', '')
     client_id = os.getenv('MY_PSIRT_CLIENT_ID', '')
     client_secret = os.getenv('MY_PSIRT_CLIENT_SECRET', '')
@@ -990,34 +966,34 @@ def check_cisco_aci_switches_psirt(os_version: str) -> dict:
     }
     token_headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     try:
-        token_resp = requests.post(token_url, data=token_data, headers=token_headers, timeout=10)
-        if not token_resp.ok:
-            return {
-                'status': 'error',
-                'message': f'Failed to get OAuth token: {token_resp.text}'
+        async with httpx.AsyncClient(timeout=10) as client:
+            token_resp = await client.post(token_url, data=token_data, headers=token_headers)
+            if token_resp.status_code != 200:
+                return {
+                    'status': 'error',
+                    'message': f'Failed to get OAuth token: {token_resp.text}'
+                }
+            token_json = token_resp.json()
+            access_token = token_json.get('access_token')
+            if not access_token:
+                return {
+                    'status': 'error',
+                    'message': 'No access token received from Cisco OAuth.'
+                }
+            # Step 2: Call PSIRT/advisory API with Bearer token
+            headers = {
+                'Accept': 'application/json',
+                'Authorization': f'Bearer {access_token}'
             }
-        token_json = token_resp.json()
-        access_token = token_json.get('access_token')
-        if not access_token:
+            psirt_url = f"{base_url}/OSType/aci?version={os_version}"
+            psirt_resp = await client.get(psirt_url, headers=headers)
+            psirt_data = psirt_resp.json() if psirt_resp.status_code == 200 else {'error': psirt_resp.text}
             return {
-                'status': 'error',
-                'message': 'No access token received from Cisco OAuth.'
+                'status': 'success',
+                'product': 'Cisco ACI',
+                'version': os_version,
+                'psirt': psirt_data,
             }
-        # Step 2: Call PSIRT/advisory API with Bearer token
-        headers = {
-            'Accept': 'application/json',
-            'Authorization': f'Bearer {access_token}'
-        }
-        psirt_url = f"{base_url}/OSType/aci?version={os_version}"
-        psirt_resp = requests.get(psirt_url, headers=headers, timeout=10)
-        print(f"PSIRT Response: {psirt_resp}")
-        psirt_data = psirt_resp.json() if psirt_resp.ok else {'error': psirt_resp.text}
-        return {
-            'status': 'success',
-            'product': 'Cisco ACI',
-            'version': os_version,
-            'psirt': psirt_data,
-        }
     except Exception as e:
         return {
             'status': 'error',
@@ -1025,7 +1001,7 @@ def check_cisco_aci_switches_psirt(os_version: str) -> dict:
         }
 
 @mcp.tool()
-def get_nexus_9000_field_notices(device_models: Optional[List[str]] = None) -> Dict[str, Any]:
+async def get_nexus_9000_field_notices(device_models: Optional[List[str]] = None) -> Dict[str, Any]:
     """
     Scrapes the Cisco website for field notices related to Nexus 9000 Series Switches.
     Scrapes ALL field notices from the page and filters for ones relevant to the provided device models.
@@ -1034,134 +1010,114 @@ def get_nexus_9000_field_notices(device_models: Optional[List[str]] = None) -> D
     """
     url = "https://www.cisco.com/c/en/us/support/switches/nexus-9000-series-switches/products-field-notices-list.html"
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        import re
-        
-        def normalize_model(model):
-            # Remove N9K-C prefix, spaces, and make uppercase for comparison
-            return model.upper().replace('N9K-C', '').replace(' ', '').replace('_', '').replace('-', '')
-
-        # First, scrape ALL field notices from the page
-        all_notices = []
-        
-        # Find all links that could be field notices
-        all_links = soup.find_all('a')
-        for link in all_links:
-            href = link.get('href', '')
-            title = link.get_text(strip=True)
-            
-            # Check if this looks like a field notice
-            if ('FN' in title.upper() or 
-                'field-notice' in href.lower() or 
-                'fn-' in href.lower() or
-                'field notice' in title.lower()):
-                
-                notice_url = href
-                if not notice_url.startswith('http'):
-                    notice_url = f"https://www.cisco.com{notice_url}"
-                
-                # Try to extract date
-                date = "N/A"
-                list_item = link.find_parent('li')
-                if list_item:
-                    item_text = list_item.get_text()
-                    date_match = re.search(r'\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b|\b([A-Za-z]+\s+\d{1,2},\s+\d{4})\b', item_text)
-                    if date_match:
-                        date = date_match.group(0)
-                
-                # Try to determine which product/model this relates to
-                product_series = "Unknown"
-                parent_heading = None
-                
-                # Look for parent heading
-                current = link.parent
-                while current and not parent_heading:
-                    for sibling in current.find_previous_siblings():
-                        if sibling.name and re.match('^h[1-6]$', sibling.name):
-                            parent_heading = sibling.get_text(strip=True)
-                            break
-                    current = current.parent
-                
-                if parent_heading:
-                    product_series = parent_heading
-                
-                all_notices.append({
-                    "title": title,
-                    "url": notice_url,
-                    "last_updated": date,
-                    "product_series": product_series,
-                    "full_text": title + " " + (list_item.get_text() if list_item else "")
-                })
-        
-        # Remove duplicates based on URL
-        unique_notices = []
-        seen_urls = set()
-        for notice in all_notices:
-            if notice['url'] not in seen_urls:
-                unique_notices.append(notice)
-                seen_urls.add(notice['url'])
-        
-        # If device_models is provided, filter for relevant notices
-        relevant_notices = []
-        if device_models:
-            normalized_device_models = set()
-            for model in device_models:
-                normalized_device_models.add(normalize_model(model))
-            
-            for notice in unique_notices:
-                # Check if any of the device models appear in the notice
-                notice_text = (notice['title'] + " " + notice['product_series'] + " " + notice['full_text']).upper()
-                
-                # Remove common prefixes/suffixes for matching
-                notice_text_clean = notice_text.replace('N9K-C', '').replace('CISCO', '').replace('NEXUS', '').replace('SWITCH', '')
-                
-                is_relevant = False
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            import re
+            def normalize_model(model):
+                # Remove N9K-C prefix, spaces, and make uppercase for comparison
+                return model.upper().replace('N9K-C', '').replace(' ', '').replace('_', '').replace('-', '')
+            # First, scrape ALL field notices from the page
+            all_notices = []
+            # Find all links that could be field notices
+            all_links = soup.find_all('a')
+            for link in all_links:
+                href = link.get('href', '')
+                title = link.get_text(strip=True)
+                # Check if this looks like a field notice
+                if ('FN' in title.upper() or 
+                    'field-notice' in href.lower() or 
+                    'fn-' in href.lower() or
+                    'field notice' in title.lower()):
+                    notice_url = href
+                    if not notice_url.startswith('http'):
+                        notice_url = f"https://www.cisco.com{notice_url}"
+                    # Try to extract date
+                    date = "N/A"
+                    list_item = link.find_parent('li')
+                    if list_item:
+                        item_text = list_item.get_text()
+                        date_match = re.search(r'\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b|\b([A-Za-z]+\s+\d{1,2},\s+\d{4})\b', item_text)
+                        if date_match:
+                            date = date_match.group(0)
+                    # Try to determine which product/model this relates to
+                    product_series = "Unknown"
+                    parent_heading = None
+                    # Look for parent heading
+                    current = link.parent
+                    while current and not parent_heading:
+                        for sibling in current.find_previous_siblings():
+                            if sibling.name and re.match('^h[1-6]$', sibling.name):
+                                parent_heading = sibling.get_text(strip=True)
+                                break
+                        current = current.parent
+                    if parent_heading:
+                        product_series = parent_heading
+                    all_notices.append({
+                        "title": title,
+                        "url": notice_url,
+                        "last_updated": date,
+                        "product_series": product_series,
+                        "full_text": title + " " + (list_item.get_text() if list_item else "")
+                    })
+            # Remove duplicates based on URL
+            unique_notices = []
+            seen_urls = set()
+            for notice in all_notices:
+                if notice['url'] not in seen_urls:
+                    unique_notices.append(notice)
+                    seen_urls.add(notice['url'])
+            # If device_models is provided, filter for relevant notices
+            relevant_notices = []
+            if device_models:
+                normalized_device_models = set()
                 for model in device_models:
-                    # Try different variations of the model name
-                    model_variations = [
-                        model,
-                        f"N9K-C{model}",
-                        f"N9K-{model}",
-                        f"NEXUS {model}",
-                        f"9K-{model}",
-                        normalize_model(model)
-                    ]
-                    
-                    for variation in model_variations:
-                        if variation.upper() in notice_text_clean:
-                            is_relevant = True
+                    normalized_device_models.add(normalize_model(model))
+                for notice in unique_notices:
+                    # Check if any of the device models appear in the notice
+                    notice_text = (notice['title'] + " " + notice['product_series'] + " " + notice['full_text']).upper()
+                    # Remove common prefixes/suffixes for matching
+                    notice_text_clean = notice_text.replace('N9K-C', '').replace('CISCO', '').replace('NEXUS', '').replace('SWITCH', '')
+                    is_relevant = False
+                    for model in device_models:
+                        # Try different variations of the model name
+                        model_variations = [
+                            model,
+                            f"N9K-C{model}",
+                            f"N9K-{model}",
+                            f"NEXUS {model}",
+                            f"9K-{model}",
+                            normalize_model(model)
+                        ]
+                        for variation in model_variations:
+                            if variation.upper() in notice_text_clean:
+                                is_relevant = True
+                                break
+                        if is_relevant:
                             break
-                    
                     if is_relevant:
-                        break
-                
-                if is_relevant:
-                    # Remove the full_text field before adding to results
-                    notice_copy = notice.copy()
-                    notice_copy.pop('full_text', None)
-                    relevant_notices.append(notice_copy)
-            
-            return {
-                "status": "success",
-                "total_notices_found": len(unique_notices),
-                "relevant_notices_count": len(relevant_notices),
-                "device_models_searched": device_models,
-                "field_notices": relevant_notices
-            }
-        else:
-            # Return all notices if no device models specified
-            for notice in unique_notices:
-                notice.pop('full_text', None)
-            
-            return {
-                "status": "success",
-                "total_notices_found": len(unique_notices),
-                "field_notices": unique_notices
-            }
-            
-    except requests.exceptions.RequestException as e:
+                        # Remove the full_text field before adding to results
+                        notice_copy = notice.copy()
+                        notice_copy.pop('full_text', None)
+                        relevant_notices.append(notice_copy)
+                return {
+                    "status": "success",
+                    "total_notices_found": len(unique_notices),
+                    "relevant_notices_count": len(relevant_notices),
+                    "device_models_searched": device_models,
+                    "field_notices": relevant_notices
+                }
+            else:
+                # Return all notices if no device models specified
+                for notice in unique_notices:
+                    notice.pop('full_text', None)
+                return {
+                    "status": "success",
+                    "total_notices_found": len(unique_notices),
+                    "field_notices": unique_notices
+                }
+    except httpx.RequestError as e:
         return {
             "status": "error",
             "message": f"Failed to fetch the webpage: {str(e)}"
@@ -1173,7 +1129,7 @@ def get_nexus_9000_field_notices(device_models: Optional[List[str]] = None) -> D
         }
 
 @mcp.tool()
-def get_apic_field_notices() -> Dict[str, Any]:
+async def get_apic_field_notices() -> Dict[str, Any]:
     """
     Scrapes the Cisco website for field notices related to APIC controllers.
     Searches the APIC support page for all field notices and technical bulletins.
@@ -1181,86 +1137,75 @@ def get_apic_field_notices() -> Dict[str, Any]:
     """
     url = "https://www.cisco.com/c/en/us/support/cloud-systems-management/application-policy-infrastructure-controller-apic/tsd-products-support-series-home.html"
     try:
-        response = requests.get(url, timeout=15)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-        import re
-        
-        all_notices = []
-        
-        # Find all links that could be field notices or technical bulletins
-        all_links = soup.find_all('a')
-        for link in all_links:
-            href = link.get('href', '')
-            title = link.get_text(strip=True)
-            
-            # Check if this looks like a field notice or technical bulletin
-            if ('FN' in title.upper() or 
-                'field-notice' in href.lower() or 
-                'field notice' in title.lower() or
-                'fn-' in href.lower() or
-                'technical bulletin' in title.lower() or
-                'bulletin' in title.lower() or
-                'tsd' in href.lower()):
-                
-                notice_url = href
-                if not notice_url.startswith('http'):
-                    notice_url = f"https://www.cisco.com{notice_url}"
-                
-                # Try to extract date
-                date = "N/A"
-                list_item = link.find_parent('li')
-                if list_item:
-                    item_text = list_item.get_text()
-                    date_match = re.search(r'\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b|\b([A-Za-z]+\s+\d{1,2},\s+\d{4})\b|\b(\d{2}/\d{2}/\d{4})\b', item_text)
-                    if date_match:
-                        date = date_match.group(0)
-                
-                # Try to determine the type of notice
-                notice_type = "Unknown"
-                if 'field notice' in title.lower() or 'fn' in title.upper():
-                    notice_type = "Field Notice"
-                elif 'bulletin' in title.lower():
-                    notice_type = "Technical Bulletin"
-                elif 'advisory' in title.lower():
-                    notice_type = "Advisory"
-                
-                # Try to determine which product/component this relates to
-                product_component = "APIC"
-                if 'server' in title.lower():
-                    product_component = "APIC Server"
-                elif 'software' in title.lower():
-                    product_component = "APIC Software"
-                elif 'hardware' in title.lower():
-                    product_component = "APIC Hardware"
-                
-                all_notices.append({
-                    "title": title,
-                    "url": notice_url,
-                    "last_updated": date,
-                    "type": notice_type,
-                    "component": product_component
-                })
-        
-        # Remove duplicates based on URL
-        unique_notices = []
-        seen_urls = set()
-        for notice in all_notices:
-            if notice['url'] not in seen_urls:
-                unique_notices.append(notice)
-                seen_urls.add(notice['url'])
-        
-        # Sort by type and title
-        unique_notices.sort(key=lambda x: (x['type'], x['title']))
-        
-        return {
-            "status": "success",
-            "total_notices_found": len(unique_notices),
-            "source_url": url,
-            "field_notices": unique_notices
-        }
-            
-    except requests.exceptions.RequestException as e:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.text, 'html.parser')
+            import re
+            all_notices = []
+            # Find all links that could be field notices or technical bulletins
+            all_links = soup.find_all('a')
+            for link in all_links:
+                href = link.get('href', '')
+                title = link.get_text(strip=True)
+                # Check if this looks like a field notice or technical bulletin
+                if ('FN' in title.upper() or 
+                    'field-notice' in href.lower() or 
+                    'field notice' in title.lower() or
+                    'fn-' in href.lower() or
+                    'technical bulletin' in title.lower() or
+                    'bulletin' in title.lower() or
+                    'tsd' in href.lower()):
+                    notice_url = href
+                    if not notice_url.startswith('http'):
+                        notice_url = f"https://www.cisco.com{notice_url}"
+                    # Try to extract date
+                    date = "N/A"
+                    list_item = link.find_parent('li')
+                    if list_item:
+                        item_text = list_item.get_text()
+                        date_match = re.search(r'\b(\d{1,2}-[A-Za-z]{3}-\d{4})\b|\b([A-Za-z]+\s+\d{1,2},\s+\d{4})\b|\b(\d{2}/\d{2}/\d{4})\b', item_text)
+                        if date_match:
+                            date = date_match.group(0)
+                    # Try to determine the type of notice
+                    notice_type = "Unknown"
+                    if 'field notice' in title.lower() or 'fn' in title.upper():
+                        notice_type = "Field Notice"
+                    elif 'bulletin' in title.lower():
+                        notice_type = "Technical Bulletin"
+                    elif 'advisory' in title.lower():
+                        notice_type = "Advisory"
+                    # Try to determine which product/component this relates to
+                    product_component = "APIC"
+                    if 'server' in title.lower():
+                        product_component = "APIC Server"
+                    elif 'software' in title.lower():
+                        product_component = "APIC Software"
+                    elif 'hardware' in title.lower():
+                        product_component = "APIC Hardware"
+                    all_notices.append({
+                        "title": title,
+                        "url": notice_url,
+                        "last_updated": date,
+                        "type": notice_type,
+                        "component": product_component
+                    })
+            # Remove duplicates based on URL
+            unique_notices = []
+            seen_urls = set()
+            for notice in all_notices:
+                if notice['url'] not in seen_urls:
+                    unique_notices.append(notice)
+                    seen_urls.add(notice['url'])
+            # Sort by type and title
+            unique_notices.sort(key=lambda x: (x['type'], x['title']))
+            return {
+                "status": "success",
+                "total_notices_found": len(unique_notices),
+                "source_url": url,
+                "field_notices": unique_notices
+            }
+    except httpx.RequestError as e:
         return {
             "status": "error",
             "message": f"Failed to fetch the webpage: {str(e)}",
@@ -1301,9 +1246,9 @@ Use the available APIC MCP tools to gather this information and provide insights
 
 
 if __name__ == "__main__":
-    def run_server():
+    async def run_server():
         """Run the MCP server."""
-        mcp.run_stdio_async()
+        await mcp.run_stdio_async()
 
     # Run the server
     asyncio.run(run_server())

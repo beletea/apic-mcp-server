@@ -1,3 +1,22 @@
+## Authentication
+
+Authentication to the APIC is always performed using credentials from the `.env` file. The `authenticate_apic` MCP tool ignores any arguments passed to it and will only use the following environment variables:
+```
+APIC_URL=https://apic.example.com
+APIC_USERNAME=admin
+APIC_PASSWORD=mypassword
+APIC_VERIFY_SSL=false
+```
+Make sure your `.env` file is present in the project root and contains the correct values. Arguments to the `authenticate_apic` function are ignored.
+
+Example usage:
+
+```python
+authenticate_apic()
+```
+
+This will always use the credentials from `.env`.
+
 # APIC-MCP-Server
 
 A comprehensive Model Context Protocol (MCP) server for managing and analyzing Cisco ACI (Application Centric Infrastructure) fabrics. This tool provides a powerful interface for network administrators and developers to interact with Cisco APIC controllers, perform analysis, and generate detailed reports.
