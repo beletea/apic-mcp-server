@@ -277,7 +277,6 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
     ```
 3. **Restart Claude Desktop** and the APIC tools will be available in your conversations.
 
-
 ### 🧪 Testing Your Setup
 
 1. **Test Environment Variables**
