@@ -275,7 +275,8 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
      }
    }
     ``` 
-  Replace `<full-path-to-your-uv>` with the full path to your `uv` executable, and `<full-path-to-your-apic_mcp_server>` with the directory containing your `apic_mcp_server.py`.
+  Replace `<full-path-to-your-uv>` with the full path to your `uv` executable, and `<full-path-to-your-apic_mcp_server>` 
+  with the directory containing your `apic_mcp_server.py`.
     
 3. **Restart Claude Desktop** and the APIC tools will be available in your conversations.
 
