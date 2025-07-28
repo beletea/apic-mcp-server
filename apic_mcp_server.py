@@ -317,7 +317,7 @@ async def get_vrfs(tenant_name: Optional[str] = None) -> Dict[str, Any]:
     return await fetch_apic_class('fvCtx', query_params)
 
 @mcp.tool()
-async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> Dict[str, Any]:
+async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any], confirm: bool = False) -> Dict[str, Any]:
     """
     Create an APIC object in the fabric. This is a dangerous operation.
 
@@ -327,6 +327,13 @@ async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> 
                            Example: {"fvAEPg": {"attributes": {"name": "my-new-epg"}}}
     :return: The result of the creation operation.
     """
+    if not confirm:
+        return {
+            "status": "pending",
+            "message": f"Confirmation required to create object under '{parent_dn}'.",
+            "endpoint": f"/api/mo/{parent_dn}.json",
+            "payload_preview": object_payload
+        }
     try:
         authenticator = await get_authenticator()
         if not authenticator.token:
@@ -334,12 +341,8 @@ async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> 
                 "status": "error",
                 "message": "Not authenticated. Please authenticate first using authenticate_apic tool."
             }
-        # The endpoint for creation is the parent's DN
         endpoint = f"/api/mo/{parent_dn}.json"
-        # The method for creation is POST
-        response = await authenticator.make_authenticated_request(endpoint, method='POST', payload=object_payload)
-        # A successful POST usually returns a 200 OK with an empty imdata or some status info.
-        # The make_authenticated_request should raise an exception on non-2xx status codes.
+        response = await authenticator.make_authenticated_request(endpoint, method='POST', data=object_payload)
         return {
             "status": "success",
             "message": f"Successfully sent creation request for object under '{parent_dn}'.",
@@ -347,7 +350,6 @@ async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> 
             "payload_sent": object_payload,
             "response": response
         }
-        
     except APICAuthenticationError as e:
         return {
             "status": "error",
@@ -362,7 +364,7 @@ async def create_apic_object(parent_dn: str, object_payload: Dict[str, Any]) -> 
         }
 
 @mcp.tool()
-async def delete_apic_object(object_dn: str) -> Dict[str, Any]:
+async def delete_apic_object(object_dn: str, confirm: bool = False) -> Dict[str, Any]:
     """
     Delete an APIC object from the fabric. This is a dangerous operation.
 
@@ -370,6 +372,13 @@ async def delete_apic_object(object_dn: str) -> Dict[str, Any]:
                       Example: 'uni/tn-my-tenant/ap-my-app/epg-my-new-epg'
     :return: The result of the deletion operation.
     """
+    if not confirm:
+        return {
+            "status": "pending",
+            "message": f"Confirmation required to delete object '{object_dn}'.",
+            "endpoint": f"/api/mo/{object_dn}.json",
+            "object_dn": object_dn
+        }
     try:
         authenticator = await get_authenticator()
         if not authenticator.token:
@@ -377,18 +386,14 @@ async def delete_apic_object(object_dn: str) -> Dict[str, Any]:
                 "status": "error",
                 "message": "Not authenticated. Please authenticate first using authenticate_apic tool."
             }
-        # The endpoint for deletion is the object's DN
         endpoint = f"/api/mo/{object_dn}.json"
-        # The method for deletion is DELETE
         response = await authenticator.make_authenticated_request(endpoint, method='DELETE')
-        # A successful DELETE usually returns a 200 OK with an empty imdata or some status info.
         return {
             "status": "success",
             "message": f"Successfully sent deletion request for object '{object_dn}'.",
             "endpoint": endpoint,
             "response": response
         }
-        
     except APICAuthenticationError as e:
         return {
             "status": "error",
