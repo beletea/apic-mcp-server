@@ -259,7 +259,7 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
    ```
   Replace `<full-path-to-your-apic_mcp_server.py>` with the full path to your `apic_mcp_server.py` file.
   If you encounter issues with the project path, you may need to adjust the path accordingly, like this:
-   ```json
+  ```json
    {
      "mcpServers": {
        "cisco-aci-apic": {
@@ -274,7 +274,8 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
        }
      }
    }
-    ``` 
+  ```
+
   Replace `<full-path-to-your-uv>` with the full path to your `uv` executable, and `<full-path-to-your-apic_mcp_server>` 
   with the directory containing your `apic_mcp_server.py`.
 
@@ -291,17 +292,7 @@ from dotenv import load_dotenv
 load_dotenv()
 print(f'APIC URL: {os.getenv(\"APIC_URL\")}')
 print(f'Username: {os.getenv(\"APIC_USERNAME\")}')
-" 
-# Ensure APIC URL and credentials are correct
-```bash
-# Verify your .env file is loaded correctly
-python -c "
-import os
-from dotenv import load_dotenv
-load_dotenv()
-print(f'APIC URL: {os.getenv(\"APIC_URL\")}')
-print(f'Username: {os.getenv(\"APIC_USERNAME\")}')
-" 
+"
 # Ensure APIC URL and credentials are correct
 ```
 
