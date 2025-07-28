@@ -274,16 +274,15 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
        }
      }
    }
-    ```
+    ``` 
+  Replace `<full-path-to-your-uv>` with the full path to your `uv` executable, and `<full-path-to-your-apic_mcp_server>` with the directory containing your `apic_mcp_server.py`.
     
 3. **Restart Claude Desktop** and the APIC tools will be available in your conversations.
 
 ### 🧪 Testing Your Setup
 
-```bash
-# Verify MCP server is running
-curl -X GET http://localhost:5000/mcp/status
 1. **Test Environment Variables**
+
 ```bash
 # Verify your .env file is loaded correctly
 python -c "
@@ -292,7 +291,7 @@ from dotenv import load_dotenv
 load_dotenv()
 print(f'APIC URL: {os.getenv(\"APIC_URL\")}')
 print(f'Username: {os.getenv(\"APIC_USERNAME\")}')
-"
+" 
 ```
 
 2. **Test MCP Server**
