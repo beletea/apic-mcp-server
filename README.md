@@ -275,10 +275,14 @@ MY_PSIRT_CLIENT_SECRET=your-client-secret
      }
    }
     ```
+    
 3. **Restart Claude Desktop** and the APIC tools will be available in your conversations.
 
 ### 🧪 Testing Your Setup
 
+```bash
+# Verify MCP server is running
+curl -X GET http://localhost:5000/mcp/status
 1. **Test Environment Variables**
 ```bash
 # Verify your .env file is loaded correctly
