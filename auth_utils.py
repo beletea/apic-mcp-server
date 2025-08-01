@@ -30,7 +30,7 @@ class APICAuthenticator:
         self.timeout = timeout or int(os.getenv('APIC_TIMEOUT', '30'))
         self.username = os.getenv('APIC_USERNAME')
         self.password = os.getenv('APIC_PASSWORD')
-        self.client = httpx.AsyncClient(verify=self.verify_ssl, timeout=self.timeout)
+        self.client = httpx.AsyncClient(verify=self.verify_ssl, timeout=self.timeout, follow_redirects=False)
         # Authentication state
         self.token = None
         self.session_id = None
